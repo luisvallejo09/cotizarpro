@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <title>Cotizaciones — Sistema</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet"/>
 <style>
@@ -16,7 +16,7 @@
   --warn:#E8A020;--warn-bg:#FEF3E2;
   --r:12px;--rs:8px;
 }
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:15px;line-height:1.5}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:15px;line-height:1.5;overflow-x:hidden}
 
 /* ====== LAYOUT TABS ====== */
 .app-header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.5rem;display:flex;align-items:center;gap:0;position:sticky;top:0;z-index:100}
@@ -256,13 +256,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     overflow-x:auto;
     scrollbar-width:none;
     gap:0;
-    height:52px;
+    height:42px;
   }
   .app-header::-webkit-scrollbar{display:none}
   .app-logo{font-size:14px;font-weight:800;padding:0;margin-right:.75rem;flex-shrink:0;color:#fff;letter-spacing:-.02em}
   .app-logo span{color:var(--accent)}
   .tabs{display:flex;gap:0;flex-shrink:0}
-  .tab-btn{padding:0 10px;font-size:11px;font-weight:600;white-space:nowrap;color:rgba(255,255,255,.5);border-bottom:2px solid transparent;height:52px}
+  .tab-btn{padding:0 10px;font-size:11px;font-weight:600;white-space:nowrap;color:rgba(255,255,255,.5);border-bottom:2px solid transparent;height:42px}
   .tab-btn.active{color:#fff;border-bottom-color:var(--accent)}
   .header-right{margin-left:auto;flex-shrink:0}
   .cfg-badge{font-size:10px;padding:5px 10px;white-space:nowrap}
@@ -279,8 +279,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     bottom:0;left:0;right:0;
     z-index:200;
     background:#1A1917;
-    padding:10px 16px calc(10px + env(safe-area-inset-bottom));
-    gap:10px;
+    padding:4px 10px calc(4px + env(safe-area-inset-bottom));
+    gap:6px;
     align-items:center;
     box-shadow:0 -1px 0 rgba(255,255,255,.08);
   }
@@ -288,28 +288,28 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     display:flex;
     flex-direction:column;
     align-items:center;
-    gap:3px;
+    gap:1px;
     flex:1;
     background:rgba(255,255,255,.07);
     border:none;
-    border-radius:12px;
-    padding:10px 6px 8px;
+    border-radius:8px;
+    padding:5px 4px 4px;
     cursor:pointer;
     font-family:inherit;
     color:rgba(255,255,255,.7);
-    font-size:10px;
+    font-size:9px;
     font-weight:700;
     letter-spacing:.03em;
     transition:background .15s,color .15s;
   }
   .mob-bar-btn:active{background:rgba(255,255,255,.15)}
-  .mob-bar-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;margin-bottom:1px}
+  .mob-bar-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;margin-bottom:0}
   .mob-bar-btn.primary{background:var(--accent);color:#fff}
   .mob-bar-btn.primary:active{background:#17835f}
   /* etiqueta modo edición en barra inferior */
   .mob-edit-pill{
     background:var(--warn-bg);color:var(--warn);
-    font-size:10px;font-weight:700;padding:3px 10px;
+    font-size:9px;font-weight:700;padding:2px 8px;
     border-radius:20px;white-space:nowrap;flex-shrink:0;
     display:none;
   }
@@ -318,21 +318,28 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   .mob-total-bar{
     display:flex;
     position:fixed;
-    bottom:calc(68px + env(safe-area-inset-bottom));
+    bottom:calc(42px + env(safe-area-inset-bottom));
     left:0;right:0;
     z-index:199;
     background:#111110;
-    padding:10px 20px;
+    padding:5px 14px;
     justify-content:space-between;
     align-items:center;
     border-top:1px solid rgba(255,255,255,.06);
+    gap:10px;
   }
-  .mob-total-bar .mtb-label{font-size:11px;color:rgba(255,255,255,.5);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
-  .mob-total-bar .mtb-val{font-size:22px;font-weight:800;color:var(--accent);letter-spacing:-.02em}
-  .mob-total-bar .mtb-iva{font-size:10px;color:rgba(255,255,255,.35);font-weight:500}
+  .mob-total-bar .mtb-label{font-size:9px;color:rgba(255,255,255,.5);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+  .mob-total-bar .mtb-val{font-size:18px;font-weight:800;color:var(--accent);letter-spacing:-.02em}
+  .mob-total-bar .mtb-iva{font-size:9px;color:rgba(255,255,255,.35);font-weight:500}
+  /* Toggle IVA en barra flotante móvil */
+  .mob-iva-toggle-wrap{display:flex;align-items:center;gap:6px;flex-shrink:0}
+  .mob-iva-toggle-wrap .iva-label{font-size:9px;color:rgba(255,255,255,.5);font-weight:600;white-space:nowrap}
+  .mob-iva-toggle-wrap .toggle{width:30px;height:18px;border-radius:9px}
+  .mob-iva-toggle-wrap .toggle::after{width:10px;height:10px;top:4px;left:4px}
+  .mob-iva-toggle-wrap .toggle.on::after{left:16px}
 
-  /* Page padding (deja espacio para 2 barras inferiores ~130px) */
-  .page{padding:.75rem .75rem 160px}
+  /* Page padding (deja espacio para 2 barras inferiores ~90px) */
+  .page{padding:.75rem .75rem 100px}
   .container{max-width:100%;overflow-x:hidden}
 
   /* ── CARD DE COTIZACIÓN: header tipo app ── */
@@ -570,7 +577,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   /* Eliminar encabezado y pie del navegador al imprimir */
   @page{margin-top:1.2cm;margin-bottom:1.8cm}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .app-header,.action-bar,.screen-form,.loading-overlay,.toast,.modal-overlay{display:none!important}
+  .app-header,.action-bar,.screen-form,.loading-overlay,.toast,.modal-overlay,
+  .mob-bottom-bar,.mob-total-bar{display:none!important}
   .page{display:none!important;padding:0}
   .print-doc{display:block!important}
   .container{max-width:100%}
@@ -1854,6 +1862,8 @@ function recalc(){
 function toggleIva(){
   ivaOn=!ivaOn;
   $('iva-toggle').classList.toggle('on',ivaOn);
+  const mobTog=$('iva-toggle-mob');
+  if(mobTog) mobTog.classList.toggle('on',ivaOn);
   $('iva-lbl').textContent=ivaOn?'IVA 19 % activo':'IVA desactivado';
   $('iva-line').style.opacity=ivaOn?'1':'0.35';
   recalc();
@@ -2036,12 +2046,20 @@ async function nuevaCotizacion(){
 function searchCliente(query){
   const list = $('cli-autocomplete');
   if(!query || query.length<2){ list.style.display='none'; return; }
+  if(!config.scriptUrl){
+    list.innerHTML='<div class="autocomplete-item"><small>⚙️ Configura Google Sheets para buscar clientes</small></div>';
+    list.style.display='block';
+    return;
+  }
   const q=query.toLowerCase();
   const matches=clientesCache.filter(c=>
     (c.Nombre||'').toLowerCase().includes(q)||
     (c.NIT||'').includes(q)
   ).slice(0,6);
-  if(!matches.length){ list.style.display='none'; return; }
+  if(!matches.length){
+    list.style.display='none';
+    return;
+  }
   list.innerHTML = matches.map(c=>`
     <div class="autocomplete-item" onmousedown="fillCliente(${JSON.stringify(c).replace(/"/g,'&quot;')})">
       <strong>${c.Nombre}</strong>
@@ -2066,7 +2084,7 @@ function hideAutocomplete(){
 async function saveClienteRapido(){
   const nombre=v('cli-nombre');
   if(!nombre){ toast('Ingresa el nombre del cliente','err'); return; }
-  if(!config.scriptUrl){ toast('Configura Google Sheets primero','err'); return; }
+  if(!config.scriptUrl){ toast('⚙️ Configura Google Sheets primero','err'); return; }
   showLoading('Guardando cliente...');
   try{
     const res=await api('saveCliente',{
@@ -2077,8 +2095,14 @@ async function saveClienteRapido(){
     if(res.ok){
       toast('Cliente guardado ✓','ok');
       await loadClientesCache();
-    } else toast('Error: '+(res.error||''),'err');
-  }catch(e){ hideLoading(); toast('Error: '+e.message,'err'); }
+    } else {
+      toast('Error al guardar: '+(res.error||'respuesta inválida'),'err');
+    }
+  }catch(e){
+    hideLoading();
+    toast('Error de conexión: '+e.message,'err');
+    console.error('saveClienteRapido error:',e);
+  }
 }
 
 async function loadClientesCache(){
@@ -2086,7 +2110,10 @@ async function loadClientesCache(){
   try{
     const res=await api('getClientes');
     clientesCache=res.rows||[];
-  }catch(e){ console.warn(e); }
+  }catch(e){
+    console.warn(e);
+    toast('No se pudo cargar clientes: '+e.message,'err');
+  }
 }
 
 // ====================================================
@@ -2701,6 +2728,10 @@ function mobSync(){
       const ivaLbl=$('iva-lbl');
       const mobIva=$('mob-iva-label');
       if(ivaLbl&&mobIva) mobIva.textContent=ivaLbl.textContent;
+      // Sincronizar estado visual toggle IVA móvil
+      const mobTog=$('iva-toggle-mob');
+      const deskTog=$('iva-toggle');
+      if(mobTog&&deskTog) mobTog.classList.toggle('on',deskTog.classList.contains('on'));
     },400);
   }
   // Edit pill
@@ -2721,6 +2752,10 @@ setTimeout(mobSync, 300);
   <div>
     <div class="mtb-label">Total a pagar</div>
     <div class="mtb-iva" id="mob-iva-label">IVA incluido</div>
+  </div>
+  <div class="mob-iva-toggle-wrap">
+    <span class="iva-label">IVA</span>
+    <button class="toggle on" id="iva-toggle-mob" onclick="toggleIva()" title="Activar/desactivar IVA"></button>
   </div>
   <div class="mtb-val" id="mob-grand-val">$ 0</div>
 </div>
