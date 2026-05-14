@@ -210,6 +210,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .hist-btn-edit:hover{opacity:.8}
 .hist-btn-del{background:var(--red-bg);color:var(--red);border-color:var(--red)}
 .hist-btn-del:hover{opacity:.8}
+.hist-btn-dup{background:#EEF2FF;color:#4F46E5;border-color:#A5B4FC}
+.hist-btn-dup:hover{opacity:.8}
 .hist-btn-print{background:var(--surface2);color:var(--text2);border-color:var(--border2)}
 .hist-btn-print:hover{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
 .hist-empty{text-align:center;padding:40px;color:var(--text3);font-size:13px}
@@ -685,6 +687,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         <button class="btn btn-outline" onclick="nuevaCotizacion()">
           <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Nueva
+        </button>
+        <button class="btn btn-outline" id="btn-duplicar" style="display:none;color:#4F46E5;border-color:#A5B4FC" onclick="duplicarActual()">
+          <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Duplicar
         </button>
         <button class="btn btn-outline" id="btn-save" onclick="guardarCotizacion()">
           <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
@@ -1513,6 +1519,9 @@ function addRow(data=null){
   row.className='item-row';
   row.id=id;
   const tipo = data ? (data.tipo||'cli') : 'cli';
+  // Solo mostrar imagen si es una URL válida de Cloudinary (https://)
+  // Ignorar base64 rotos o truncados de versiones anteriores
+  const validImg = data && data.img && (data.img.startsWith('https://') || data.img.startsWith('http://'));
   row.innerHTML=`
     <div class="col-num">${rowCount}</div>
     <div class="col-img">
@@ -1520,11 +1529,11 @@ function addRow(data=null){
         ondragover="event.preventDefault();this.classList.add('drag-over')"
         ondragleave="this.classList.remove('drag-over')"
         ondrop="dropRowImg(event,'${id}')">
-        <div class="img-thumb-wrap" id="imgthumb-${id}" style="${data&&data.img?'':'display:none'}">
-          <img src="${data&&data.img?data.img:''}" onclick="zoomImg(this)"/>
+        <div class="img-thumb-wrap" id="imgthumb-${id}" style="${validImg?'':'display:none'}">
+          <img src="${validImg?data.img:''}" onclick="zoomImg(this)"/>
           <button class="desc-img-del" onclick="removeRowImg('${id}')">×</button>
         </div>
-        <div id="imglabel-${id}" style="${data&&data.img?'display:none':''}">
+        <div id="imglabel-${id}" style="${validImg?'display:none':''}">
           <div class="img-menu-wrap" id="imgmenu-${id}">
             <button class="img-menu-btn" type="button" onclick="toggleImgMenu('${id}')">
               📷 Foto
@@ -1548,7 +1557,7 @@ function addRow(data=null){
     </div>
     <div class="col-prod" style="position:relative">
       <textarea class="ti-area" placeholder="Nombre del producto" rows="1" oninput="autoResize(this);searchProductoRow(this,'${id}')" onblur="hideProductoAC('${id}')">${data?escHtml(data.name||''):''}</textarea>
-      <div class="autocomplete-list" id="prodac-${id}" style="display:none;min-width:260px"></div>
+      <!-- autocompletado manejado por portal global #prod-ac-portal -->
     </div>
     <div class="col-desc"><textarea class="ti-area desc-text" placeholder="Descripción" rows="1" oninput="autoResize(this)">${data?escHtml(data.desc||''):''}</textarea></div>
     <div class="col-qty"><input class="ti r" type="number" min="1" value="${data?data.qty:1}" onchange="recalc()" oninput="recalc()"/></div>
@@ -1758,6 +1767,11 @@ document.addEventListener('click', function(e){
   if(!e.target.closest('.img-menu-wrap')){
     document.querySelectorAll('.img-dropdown.open').forEach(d=>d.classList.remove('open'));
     document.querySelectorAll('.img-menu-btn.open').forEach(b=>b.classList.remove('open'));
+  }
+  // Cerrar autocompletado de productos si se hace clic fuera
+  if(!e.target.closest('#prod-ac-portal') && !e.target.closest('.col-prod')){
+    const portal = getProdACPortal();
+    portal.style.display='none';
   }
 });
 
@@ -1981,7 +1995,7 @@ function collectRows(){
     rows.push({
       name:  tr.querySelector('.col-prod textarea')?.value||tr.querySelector('.col-prod input')?.value||'',
       desc:  tr.querySelector('.desc-text')?.value||'',
-      img:   (()=>{ const th=tr.querySelector('[id^="imgthumb-"] img'); return (th&&th.src&&(th.src.startsWith('data:')||th.src.startsWith('http')))?th.src:''; })(),
+      img:   (()=>{ const th=tr.querySelector('[id^="imgthumb-"] img'); return (th&&th.src&&th.src.startsWith('https://'))?th.src:''; })(),
       qty, pDist, pCli, tipo, disc:d,
       price,
       total: Math.max(0,qty*price-d)
@@ -1996,6 +2010,115 @@ function calcTotals(){
   const base=sub-disc;
   const iva=ivaOn?base*0.19:0;
   return {sub,disc,base,iva,grand:base+iva};
+}
+
+
+// ====================================================
+// DUPLICAR COTIZACIÓN
+// ====================================================
+async function duplicarCotizacion(rowNum){
+  const row = historialCache.find(r => r._row === rowNum);
+  if(!row) return;
+
+  // Cargar todos los datos de la cotización original
+  editingRowId = null; editingId = null;
+  $('edit-mode-label').style.display = 'none';
+
+  // Rellenar cliente y observaciones
+  $('cli-nombre').value = row.Cliente||'';
+  $('cli-nit').value    = row.NIT||'';
+  $('cli-tel').value    = row.Tel||'';
+  $('cli-email').value  = row.Email||'';
+  $('cli-dir').value    = row.Dir||'';
+  $('emp-nombre').value = row.EmpNombre||'';
+  $('emp-nit').value    = row.EmpNIT||'';
+  $('obs-name').value   = row.ObsNombre||'';
+  $('obs-email').value  = row.ObsEmail||'';
+  $('obs-text').value   = row.ObsTexto||'';
+  $('cot-estado').value = 'nueva';
+
+  // Validez: 30 días desde hoy
+  const fval = new Date(); fval.setDate(fval.getDate()+30);
+  $('cot-validez').value = fval.toISOString().split('T')[0];
+
+  // IVA
+  const ivaVal = row.IVA==='true'||row.IVA===true;
+  ivaOn = ivaVal;
+  $('iva-toggle').classList.toggle('on', ivaOn);
+  $('iva-lbl').textContent = ivaOn?'IVA 19 % activo':'IVA desactivado';
+  $('iva-line').style.opacity = ivaOn?'1':'0.35';
+
+  // Items
+  $('items-body').innerHTML = ''; rowCount = 0;
+  try{
+    const items = typeof row.Items==='string' ? JSON.parse(row.Items||'[]') : row.Items||[];
+    items.forEach(item => {
+      if(item.pDist===undefined) item.pDist = item.tipo==='dist'?(item.price||0):0;
+      if(item.pCli===undefined)  item.pCli  = item.tipo!=='dist'?(item.price||0):0;
+      addRow(item);
+    });
+  }catch(e){ addRow(); }
+  recalc();
+
+  // Nuevo número consecutivo
+  await initConsecutivo();
+
+  // Badge NUEVA
+  $('cot-num-badge').textContent = 'NUEVA';
+  $('cot-num-badge').className   = 'cot-num-badge badge-new';
+  $('cot-num').style.background  = 'var(--accent-bg)';
+  $('cot-num').style.color       = 'var(--accent)';
+
+  showPage('cotizacion');
+  toast('📋 Cotización duplicada — revisa y guarda como nueva','ok');
+}
+
+// Duplicar la cotización que está abierta actualmente en el formulario
+async function duplicarActual(){
+  const items   = collectRows();
+  const cliente = {
+    Cliente: v('cli-nombre'), NIT: v('cli-nit'), Tel: v('cli-tel'),
+    Email: v('cli-email'), Dir: v('cli-dir'),
+    EmpNombre: v('emp-nombre'), EmpNIT: v('emp-nit'),
+    ObsNombre: v('obs-name'), ObsEmail: v('obs-email'), ObsTexto: v('obs-text'),
+    IVA: String(ivaOn), Items: items,
+    Validez: v('cot-validez'), Estado: 'nueva',
+  };
+  // Limpiar modo edición
+  editingRowId = null; editingId = null;
+  $('edit-mode-label').style.display = 'none';
+
+  // Rellenar con los mismos datos
+  $('cli-nombre').value  = cliente.Cliente;
+  $('cli-nit').value     = cliente.NIT;
+  $('cli-tel').value     = cliente.Tel;
+  $('cli-email').value   = cliente.Email;
+  $('cli-dir').value     = cliente.Dir;
+  $('emp-nombre').value  = cliente.EmpNombre;
+  $('emp-nit').value     = cliente.EmpNIT;
+  $('obs-name').value    = cliente.ObsNombre;
+  $('obs-email').value   = cliente.ObsEmail;
+  $('obs-text').value    = cliente.ObsTexto;
+  $('cot-estado').value  = 'nueva';
+
+  const fval = new Date(); fval.setDate(fval.getDate()+30);
+  $('cot-validez').value = fval.toISOString().split('T')[0];
+
+  $('items-body').innerHTML = ''; rowCount = 0;
+  items.forEach(item => addRow(item));
+  recalc();
+
+  await initConsecutivo();
+  $('cot-num-badge').textContent = 'NUEVA';
+  $('cot-num-badge').className   = 'cot-num-badge badge-new';
+  $('cot-num').style.background  = 'var(--accent-bg)';
+  $('cot-num').style.color       = 'var(--accent)';
+
+  // Ocultar botón duplicar
+  const btnD = $('btn-duplicar'); if(btnD) btnD.style.display='none';
+  const btnDM = $('btn-duplicar-mob'); if(btnDM) btnDM.style.display='none';
+
+  toast('📋 Cotización duplicada — revisa y guarda como nueva','ok');
 }
 
 // ====================================================
@@ -2044,6 +2167,8 @@ async function guardarCotizacion(){
       $('cot-num-badge').className='cot-num-badge badge-new';
       $('cot-num').style.background='var(--accent-bg)';
       $('cot-num').style.color='var(--accent)';
+      const _bd=$('btn-duplicar'); if(_bd) _bd.style.display='none';
+      const _bdm=$('btn-duplicar-mob'); if(_bdm) _bdm.style.display='none';
       if(!wasEditing){
         await initConsecutivo();
       }
@@ -2064,6 +2189,8 @@ let editingId = null;
 async function nuevaCotizacion(){
   editingRowId=null; editingId=null;
   $('edit-mode-label').style.display='none';
+  const _bdn=$('btn-duplicar'); if(_bdn) _bdn.style.display='none';
+  const _bdmn=$('btn-duplicar-mob'); if(_bdmn) _bdmn.style.display='none';
   $('cot-num-badge').textContent='NUEVA';
   $('cot-num-badge').className='cot-num-badge badge-new';
   $('cot-num').style.background='var(--accent-bg)';
@@ -2093,13 +2220,21 @@ function searchCliente(query){
     list.style.display='block';
     return;
   }
+  // Si el cache está vacío, recargarlo y volver a buscar
+  if(!clientesCache.length){
+    list.innerHTML='<div class="autocomplete-item"><small>🔄 Cargando clientes...</small></div>';
+    list.style.display='block';
+    loadClientesCache().then(()=> searchCliente(query));
+    return;
+  }
   const q=query.toLowerCase();
   const matches=clientesCache.filter(c=>
     (c.Nombre||'').toLowerCase().includes(q)||
     (c.NIT||'').includes(q)
   ).slice(0,6);
   if(!matches.length){
-    list.style.display='none';
+    list.innerHTML='<div class="autocomplete-item"><small>No se encontró "'+query+'" — puedes escribirlo manualmente</small></div>';
+    list.style.display='block';
     return;
   }
   list.innerHTML = matches.map(c=>`
@@ -2153,8 +2288,7 @@ async function loadClientesCache(){
     const res=await api('getClientes');
     clientesCache=res.rows||[];
   }catch(e){
-    console.warn(e);
-    toast('No se pudo cargar clientes: '+e.message,'err');
+    console.warn('loadClientesCache error:',e);
   }
 }
 
@@ -2200,6 +2334,7 @@ function renderHistorial(rows){
       <td>
         <div class="hist-actions">
           <button class="hist-btn hist-btn-print" onclick="imprimirDesdHistorial(${r._row})">🖨 PDF</button>
+          <button class="hist-btn hist-btn-dup" onclick="duplicarCotizacion(${r._row})">⧉ Duplicar</button>
           <button class="hist-btn hist-btn-edit" onclick="editarCotizacion(${r._row})">✏️ Editar</button>
           <button class="hist-btn hist-btn-del" onclick="eliminarCotizacion('${r.ID}',${r._row})">🗑</button>
         </div>
@@ -2269,6 +2404,9 @@ async function editarCotizacion(rowNum){
   $('cot-num-badge').className='cot-num-badge badge-edit';
   $('cot-num').style.background='var(--warn-bg)';
   $('cot-num').style.color='var(--warn)';
+  // Mostrar botón Duplicar en escritorio y móvil
+  const _btnD=$('btn-duplicar'); if(_btnD) _btnD.style.display='';
+  const _btnDM=$('btn-duplicar-mob'); if(_btnDM) _btnDM.style.display='';
 
   showPage('cotizacion');
   toast('Cotización cargada para editar ✏️','ok');
@@ -2411,21 +2549,55 @@ async function eliminarProducto(id){
 }
 
 // ── Autocomplete de producto en fila ─────────────────────
+// Portal único para autocompletado de productos (evita clipping del overflow)
+let _prodACPortal = null;
+let _prodACRowId  = null;
+
+function getProdACPortal(){
+  if(!_prodACPortal){
+    _prodACPortal = document.createElement('div');
+    _prodACPortal.id = 'prod-ac-portal';
+    _prodACPortal.style.cssText = [
+      'position:fixed','z-index:9999','background:var(--surface)',
+      'border:1.5px solid var(--accent)','border-radius:var(--rs)',
+      'max-height:220px','overflow-y:auto',
+      'box-shadow:0 4px 20px rgba(0,0,0,.13)',
+      'display:none','min-width:260px'
+    ].join(';');
+    document.body.appendChild(_prodACPortal);
+  }
+  return _prodACPortal;
+}
+
+function positionProdAC(textarea){
+  const rect = textarea.getBoundingClientRect();
+  const portal = getProdACPortal();
+  portal.style.left  = rect.left + 'px';
+  portal.style.top   = (rect.bottom + 4) + 'px';
+  portal.style.width = Math.max(rect.width, 260) + 'px';
+}
+
 function searchProductoRow(textarea, rowId){
   autoResize(textarea);
   const query = textarea.value;
-  const list = $('prodac-'+rowId);
-  if(!list) return;
-  if(!query || query.length < 1 || !productosCache.length){ list.style.display='none'; return; }
+  const portal = getProdACPortal();
+  _prodACRowId = rowId;
+
+  if(!query || query.length < 1 || !productosCache.length){
+    portal.style.display='none'; return;
+  }
   const q = query.toLowerCase();
   const matches = productosCache.filter(p=>(p.Nombre||'').toLowerCase().includes(q)).slice(0,6);
-  if(!matches.length){ list.style.display='none'; return; }
-  list.innerHTML = matches.map(p=>`
+  if(!matches.length){ portal.style.display='none'; return; }
+
+  portal.innerHTML = matches.map(p=>`
     <div class="autocomplete-item" onmousedown="fillProductoRow('${rowId}',${JSON.stringify(p).replace(/"/g,'&quot;')})">
       <strong>${p.Nombre}</strong>
       <small>${p.Descripcion||''} ${p.PrecioCliente?'· '+COP(parseFloat(p.PrecioCliente)||0):''}</small>
     </div>`).join('');
-  list.style.display='block';
+
+  positionProdAC(textarea);
+  portal.style.display='block';
 }
 
 function fillProductoRow(rowId, p){
@@ -2458,7 +2630,10 @@ function fillProductoRow(rowId, p){
 }
 
 function hideProductoAC(rowId){
-  setTimeout(()=>{ const l=$('prodac-'+rowId); if(l) l.style.display='none'; },200);
+  setTimeout(()=>{
+    const portal = getProdACPortal();
+    if(_prodACRowId === rowId) portal.style.display='none';
+  }, 200);
 }
 
 // ====================================================
@@ -2787,6 +2962,14 @@ function mobSync(){
 }
 // Run after init
 setTimeout(mobSync, 300);
+
+// Reposicionar el portal de autocompletado si el usuario hace scroll
+window.addEventListener('scroll', ()=>{
+  if(_prodACPortal && _prodACPortal.style.display!=='none'){
+    _prodACPortal.style.display='none';
+  }
+}, true);
+
 </script>
 
 <!-- ===== BARRA INFERIOR MÓVIL ===== -->
@@ -2806,6 +2989,10 @@ setTimeout(mobSync, 300);
   <button class="mob-bar-btn" onclick="nuevaCotizacion()">
     <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     Nueva
+  </button>
+  <button class="mob-bar-btn" id="btn-duplicar-mob" style="display:none;color:#4F46E5" onclick="duplicarActual()">
+    <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    Duplicar
   </button>
   <button class="mob-bar-btn" onclick="guardarCotizacion()">
     <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
