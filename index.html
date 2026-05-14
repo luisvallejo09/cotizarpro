@@ -1099,6 +1099,12 @@ const v = id => (document.getElementById(id)||{}).value||'';
 const $ = id => document.getElementById(id);
 
 // ====================================================
+// CLOUDINARY — almacenamiento de imágenes en la nube
+// ====================================================
+const CLOUDINARY_CLOUD  = 'dex0nxwjm';
+const CLOUDINARY_PRESET = 'Cotizarpro';
+
+// ====================================================
 // CONFIG
 // ====================================================
 function loadConfig(){
@@ -1681,17 +1687,49 @@ function dropRowImg(event, rowId){
 }
 
 function applyRowImg(file, rowId){
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const wrap=document.getElementById('imgthumb-'+rowId);
-    if(!wrap) return;
-    wrap.querySelector('img').src=e.target.result;
-    wrap.style.display='inline-block';
-    const lbl=document.getElementById('imglabel-'+rowId);
-    if(lbl) lbl.style.display='none';
+  const wrap = document.getElementById('imgthumb-'+rowId);
+  if(!wrap) return;
+  const img  = wrap.querySelector('img');
+  const lbl  = document.getElementById('imglabel-'+rowId);
+
+  // Mostrar previsualización local inmediatamente mientras sube
+  const localReader = new FileReader();
+  localReader.onload = e => {
+    img.src = e.target.result;
+    wrap.style.display = 'inline-block';
+    wrap.style.opacity = '0.45';
+    img.title = '\u23F3 Subiendo...';
+    if(lbl) lbl.style.display = 'none';
     closeImgMenu(rowId);
   };
-  reader.readAsDataURL(file);
+  localReader.readAsDataURL(file);
+
+  // Subir a Cloudinary en segundo plano
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', CLOUDINARY_PRESET);
+
+  fetch('https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD + '/image/upload', {
+    method: 'POST',
+    body: formData
+  })
+  .then(r => r.json())
+  .then(data => {
+    if(data.secure_url){
+      img.src = data.secure_url;
+      img.title = '';
+      wrap.style.opacity = '1';
+      scheduleDraftSave();
+      toast('\uD83D\uDCF7 Foto subida a la nube \u2713','ok');
+    } else {
+      throw new Error((data.error && data.error.message) || 'Error en Cloudinary');
+    }
+  })
+  .catch(err => {
+    wrap.style.opacity = '1';
+    img.title = '\u26A0\uFE0F No se pudo subir a la nube';
+    toast('\u26A0\uFE0F Foto solo local: '+err.message,'err');
+  });
 }
 
 // ── MENÚ DESPLEGABLE FOTO ────────────────────────────────
@@ -1880,7 +1918,6 @@ function scheduleDraftSave(){
 }
 
 function saveDraft(){
-  if(editingRowId) return; // no pisar edición de historial
   try{
     const draft={
       num:v('cot-num'), validez:v('cot-validez'), estado:v('cot-estado'),
@@ -1997,13 +2034,18 @@ async function guardarCotizacion(){
     const res = await api('saveCotizacion', body);
     hideLoading();
     if(res.ok){
-      toast(editingRowId?'Cotización actualizada ✓':'Cotización guardada ✓','ok');
+      const wasEditing = !!editingRowId;
+      toast(wasEditing?'Cotización actualizada ✓':'Cotización guardada ✓','ok');
       clearDraft();
-      if(!editingRowId){
-        // siguiente consecutivo
+      // Limpiar modo edición siempre tras guardar exitosamente
+      editingRowId=null; editingId=null;
+      $('edit-mode-label').style.display='none';
+      $('cot-num-badge').textContent='NUEVA';
+      $('cot-num-badge').className='cot-num-badge badge-new';
+      $('cot-num').style.background='var(--accent-bg)';
+      $('cot-num').style.color='var(--accent)';
+      if(!wasEditing){
         await initConsecutivo();
-        // limpiar modo edicion
-        editingRowId=null; editingId=null;
       }
     } else {
       toast('Error: '+(res.error||'desconocido'),'err');
