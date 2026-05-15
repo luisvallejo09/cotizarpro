@@ -633,6 +633,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   .pitem-name{font-weight:600;font-size:8.5pt;color:#1A1917}
   .pitem-desc{font-size:7.5pt;color:#6A6660;margin-top:1pt}
   .pitem-img{width:75pt;height:60pt;object-fit:cover;border-radius:4pt;display:block;margin:0 auto}
+  .pitem-img[style*="display:none"]{height:0;width:0}
+  td:has(.pitem-img[style*="display:none"]){padding:0!important;height:0}
   .pitem-num{text-align:center;font-size:8pt;color:#A09B96;font-weight:600}
   .print-totals{margin-top:8pt;padding-top:8pt;border-top:0.75pt solid #E0DBD4;display:flex;flex-direction:column;align-items:flex-end;gap:5pt}
   .pt-row{display:flex;gap:20pt;font-size:8.5pt}
@@ -648,6 +650,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 }
 .mob-cot-info{display:none}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
 </head>
 <body>
 
@@ -696,9 +700,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
           <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           Guardar
         </button>
-        <button class="btn btn-primary" onclick="printDoc()">
-          <svg viewBox="0 0 24 24" style="stroke:#fff"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-          Imprimir / PDF
+        <button class="btn btn-outline" onclick="printDoc()" title="Imprimir">
+          <svg viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Imprimir
+        </button>
+        <button class="btn btn-primary" onclick="generarPDF()" id="btn-pdf">
+          <svg viewBox="0 0 24 24" style="stroke:#fff"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+          Guardar PDF
         </button>
       </div>
     </div>
@@ -1530,7 +1538,7 @@ function addRow(data=null){
         ondragleave="this.classList.remove('drag-over')"
         ondrop="dropRowImg(event,'${id}')">
         <div class="img-thumb-wrap" id="imgthumb-${id}" style="${validImg?'':'display:none'}">
-          <img src="${validImg?data.img:''}" onclick="zoomImg(this)"/>
+          <img ${validImg?`src="${data.img}"`:'src="data:,"'} onclick="zoomImg(this)"/>
           <button class="desc-img-del" onclick="removeRowImg('${id}')">×</button>
         </div>
         <div id="imglabel-${id}" style="${validImg?'display:none':''}">
@@ -1863,7 +1871,7 @@ function promptImgUrl(rowId){
   img.src = trimmed;
   img.onerror = function(){
     alert('No se pudo cargar la imagen. Verifica que la URL sea pública y directa a una imagen (termina en .jpg, .png, .webp, etc.).\n\nConsejo: haz clic derecho en la imagen de la página y elige "Copiar dirección de imagen".');
-    img.src = '';
+    img.removeAttribute('src');
     wrap.style.display = 'none';
     const lbl = document.getElementById('imglabel-'+rowId);
     if(lbl){ lbl.style.display='flex'; lbl.style.flexDirection='column'; }
@@ -1937,7 +1945,8 @@ function saveDraft(){
       num:v('cot-num'), validez:v('cot-validez'), estado:v('cot-estado'),
       cli:{nombre:v('cli-nombre'),nit:v('cli-nit'),tel:v('cli-tel'),email:v('cli-email'),dir:v('cli-dir')},
       obs:{name:v('obs-name'),email:v('obs-email'),text:v('obs-text')},
-      iva:ivaOn, items:collectRows(), ts:Date.now()
+      iva:ivaOn, items:collectRows(), ts:Date.now(),
+      editingRowId: editingRowId||null, editingId: editingId||null
     };
     localStorage.setItem('cotiza_draft', JSON.stringify(draft));
   }catch(e){ console.warn('Error guardando borrador',e); }
@@ -1975,6 +1984,18 @@ function restoreDraft(){
     if(items.length){ items.forEach(item=>addRow(item)); }
     else { addRow(); addRow(); }
     recalc();
+    // Restaurar modo edición si el borrador era de una edición en curso
+    if(d.editingRowId && d.editingId){
+      editingRowId = d.editingRowId;
+      editingId    = d.editingId;
+      $('edit-mode-label').style.display='';
+      $('cot-num-badge').textContent='EDITANDO';
+      $('cot-num-badge').className='cot-num-badge badge-edit';
+      $('cot-num').style.background='var(--warn-bg)';
+      $('cot-num').style.color='var(--warn)';
+      const _bd=$('btn-duplicar'); if(_bd) _bd.style.display='';
+      const _bdm=$('btn-duplicar-mob'); if(_bdm) _bdm.style.display='';
+    }
     return items.length>0 || Object.values(c).some(x=>x);
   }catch(e){ console.warn('Error restaurando borrador',e); return false; }
 }
@@ -2748,9 +2769,10 @@ function buildPrint(){
   const cotNum=v('cot-num');
   const cotVal=v('cot-validez')?new Date(v('cot-validez')+'T00:00:00').toLocaleDateString('es-CO',{year:'numeric',month:'long',day:'numeric'}):'';
   const logoHTML=logoDataUrl?`<img src="${logoDataUrl}" class="print-logo-img"/>`:`<div class="print-logo-none"><span>LOGO</span></div>`;
+  const hasAnyImg = rows.some(r => r.img);
   const tableRows=rows.map((r,i)=>`<tr>
     <td class="pitem-num">${i+1}</td>
-    <td class="c" style="vertical-align:middle">${r.img?`<img src="${r.img}" class="pitem-img"/>`:'—'}</td>
+    ${hasAnyImg?`<td class="c" style="vertical-align:middle">${r.img?`<img src="${r.img}" class="pitem-img" onerror="this.style.display='none'"/>`:'&nbsp;'}</td>`:''}
     <td>
       <div class="pitem-name">${r.name||'—'}</div>
       <div class="pitem-desc">${r.desc}</div>
@@ -2791,7 +2813,7 @@ function buildPrint(){
     <table class="print-table">
       <thead><tr>
         <th class="c" style="width:22pt">#</th>
-        <th class="c" style="width:85pt">Imagen</th>
+        ${hasAnyImg?`<th class="c" style="width:85pt">Imagen</th>`:''}
         <th>Producto / Descripción</th>
         <th class="r" style="width:40pt">Cant.</th>
         <th class="r" style="width:68pt">V. Unitario</th>
@@ -2890,6 +2912,272 @@ document.querySelector('.screen-form').addEventListener('input', scheduleDraftSa
     }catch(e){ console.warn('No se pudo precargar historial',e); }
   }
 })();
+
+
+// ====================================================
+// GENERAR PDF — pdfmake (sin captura de pantalla)
+// ====================================================
+
+async function fetchImgBase64(url){
+  try{
+    const r = await fetch(url, {mode:'cors'});
+    if(!r.ok) return null;
+    const blob = await r.blob();
+    return await new Promise(res=>{
+      const rd=new FileReader();
+      rd.onload=()=>res(rd.result);
+      rd.onerror=()=>res(null);
+      rd.readAsDataURL(blob);
+    });
+  }catch(e){ return null; }
+}
+
+async function generarPDF(){
+  if(typeof pdfMake==='undefined'){
+    toast('Librería PDF no cargada, recarga la página','err');
+    return;
+  }
+
+  const btn=$('btn-pdf');
+  const origHTML = btn ? btn.innerHTML : '';
+  if(btn){ btn.disabled=true; btn.innerHTML='<svg viewBox="0 0 24 24" style="stroke:#fff;width:15px;height:15px;fill:none;stroke-width:2;stroke-linecap:round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Generando...'; }
+
+  try{
+    const rows    = collectRows();
+    const totals  = calcTotals();
+    const hasImg  = rows.some(r=>r.img);
+
+    // ── Nombre del archivo ──
+    const numStr  = (v('cot-num')||'COT').replace(/[/\\:*?"<>|]/g,'');
+    const cliStr  = (v('cli-nombre')||'').replace(/[/\\:*?"<>|]/g,'').trim();
+    const hoyD    = new Date();
+    const fechaStr= String(hoyD.getDate()).padStart(2,'0')+'-'+String(hoyD.getMonth()+1).padStart(2,'0')+'-'+hoyD.getFullYear();
+    const filename= [numStr,cliStr,fechaStr].filter(Boolean).join(' - ')+'.pdf';
+
+    // ── Convertir imágenes a base64 ──
+    const imgMap={};
+    // Validar logo: solo usar si es un dataURL de imagen válido
+    const safeLogoUrl = logoDataUrl && typeof logoDataUrl==='string' && logoDataUrl.startsWith('data:image') ? logoDataUrl : null;
+    if(safeLogoUrl){
+      imgMap['__logo__'] = safeLogoUrl;
+    } else {
+      // Fallback: leer desde el img del DOM en caso de que logoDataUrl sea stale
+      const logoImg = document.querySelector('#logo-wrap img');
+      if(logoImg && logoImg.src && logoImg.src.startsWith('data:image')){
+        imgMap['__logo__'] = logoImg.src;
+      } else if(logoImg && logoImg.src && logoImg.src.startsWith('https://')){
+        const b64 = await fetchImgBase64(logoImg.src);
+        if(b64 && typeof b64==='string' && b64.startsWith('data:image')) imgMap['__logo__'] = b64;
+      }
+    }
+    if(hasImg){
+      showLoading('Cargando imágenes...');
+      await Promise.all(rows.filter(r=>r.img).map(async r=>{
+        if(!imgMap[r.img]){
+          const b64 = await fetchImgBase64(r.img);
+          if(b64 && typeof b64==='string' && b64.startsWith('data:image')) imgMap[r.img]=b64;
+        }
+      }));
+      hideLoading();
+    }
+
+    // ── Colores ──
+    const C={ dark:'#1A1917', mid:'#6A6660', muted:'#A09B96', accent:'#1D9E75',
+              border:'#E0DBD4', headBg:'#F0EDE8', altBg:'#F7F5F2' };
+
+    // ── Encabezado: logo | empresa | cotización ──
+    const logoCell = imgMap['__logo__']
+      ? { image:imgMap['__logo__'], width:88, height:44, fit:[88,44], margin:[0,0,0,0] }
+      : { text:'', margin:[0,0,0,0] };
+
+    const empNombre = v('emp-nombre')||'';
+    const empLines  = [v('emp-nit'),v('emp-tel'),v('emp-dir'),v('emp-ciudad'),v('emp-web')].filter(Boolean);
+    const empresaCell = {
+      stack:[
+        empNombre ? { text:empNombre, fontSize:10, bold:true, color:C.dark, margin:[0,0,0,2] } : {},
+        { text:empLines.join('   ·   '), fontSize:7, color:C.mid, lineHeight:1.5 }
+      ],
+      margin:[10,0,0,0]
+    };
+
+    const cotVal = v('cot-validez') ? new Date(v('cot-validez')+'T00:00:00').toLocaleDateString('es-CO',{year:'numeric',month:'long',day:'numeric'}) : '';
+    const cotFecha = hoyD.toLocaleDateString('es-CO',{year:'numeric',month:'long',day:'numeric'});
+    const numCell = {
+      stack:[
+        { text:'COTIZACIÓN', fontSize:18, bold:true, color:C.dark, alignment:'right', letterSpacing:-0.5 },
+        { text:'\n', fontSize:3 },
+        { text:'N°  '+v('cot-num'), fontSize:8, color:C.mid, alignment:'right' },
+        { text:'Fecha  '+cotFecha, fontSize:8, color:C.mid, alignment:'right' },
+        cotVal ? { text:'Válida hasta  '+cotVal, fontSize:8, color:C.mid, alignment:'right' } : {}
+      ],
+      margin:[10,0,0,0]
+    };
+
+    const header = {
+      columns:[logoCell, empresaCell, numCell],
+      columnGap:10,
+      margin:[0,0,0,8]
+    };
+
+    // ── Bloque cliente ──
+    const cliFields=[
+      ['Cliente', v('cli-nombre')], ['NIT', v('cli-nit')],
+      ['Teléfono', v('cli-tel')],  ['Correo', v('cli-email')],
+      ['Dirección', v('cli-dir')]
+    ].filter(([,val])=>val);
+
+    const clienteBlock = cliFields.length ? {
+      table:{
+        widths:['*','*'],
+        body: Array.from({length:Math.ceil(cliFields.length/2)}, (_,i)=>{
+          const a=cliFields[i*2], b=cliFields[i*2+1];
+          const cell=([lbl,val])=>({
+            stack:[
+              {text:lbl, fontSize:7, color:C.muted, bold:true},
+              {text:val, fontSize:8.5, color:C.dark}
+            ],
+            border:[false,false,false,false],
+            margin:[0,2,0,2]
+          });
+          return [a ? cell(a) : {text:'',border:[false,false,false,false]},
+                  b ? cell(b) : {text:'',border:[false,false,false,false]}];
+        })
+      },
+      layout:'noBorders',
+      margin:[0,0,0,6]
+    } : null;
+
+    // ── Tabla de productos ──
+    const colWidths = hasImg ? [16, 56, '*', 36, 56, 44, 56]
+                             : [16, '*', 36, 56, 44, 56];
+    const thStyle  = { fontSize:7, bold:true, color:C.muted, fillColor:C.headBg,
+                       alignment:'center', margin:[2,4,2,4] };
+    const thR      = { ...thStyle, alignment:'right' };
+    const thL      = { ...thStyle, alignment:'left' };
+
+    const tableHead = hasImg
+      ? [ {text:'#',...thStyle}, {text:'Foto',...thStyle}, {text:'Producto / Descripción',...thL},
+          {text:'Cant.',...thR}, {text:'V. Unitario',...thR},
+          {text:'Descuento',...thR}, {text:'V. Total',...thR} ]
+      : [ {text:'#',...thStyle}, {text:'Producto / Descripción',...thL},
+          {text:'Cant.',...thR}, {text:'V. Unitario',...thR},
+          {text:'Descuento',...thR}, {text:'V. Total',...thR} ];
+
+    const tdBase  = { fontSize:8.5, color:C.dark, margin:[2,5,2,5], border:[false,false,false,true], borderColor:[C.border,C.border,C.border,C.border] };
+    const tdR     = { ...tdBase, alignment:'right' };
+    const tdC     = { ...tdBase, alignment:'center' };
+    const tdMuted = { ...tdBase, color:C.muted, alignment:'center', fontSize:8 };
+
+    const tableBody = rows.map((r,i)=>{
+      const imgData = r.img && imgMap[r.img] && typeof imgMap[r.img]==='string' && imgMap[r.img].startsWith('data:image') ? imgMap[r.img] : null;
+      const imgCell = imgData
+        ? { image:imgData, width:50, height:40, fit:[50,40], alignment:'center',
+            border:[false,false,false,true], borderColor:[C.border,C.border,C.border,C.border], margin:[2,2,2,2] }
+        : { text:'', ...tdBase };
+      const nameDescCell = {
+        stack:[
+          { text:r.name||'—', bold:true, fontSize:8.5, color:C.dark },
+          r.desc ? { text:r.desc, fontSize:7.5, color:C.mid, margin:[0,1,0,0] } : {}
+        ],
+        ...tdBase
+      };
+      const baseRow = [
+        { text:String(i+1), ...tdMuted },
+        ...(hasImg ? [imgCell] : []),
+        nameDescCell,
+        { text:String(r.qty), ...tdR },
+        { text:COP(r.price), ...tdR },
+        { text:COP(r.disc), ...tdR },
+        { text:COP(r.total), ...tdR, bold:true }
+      ];
+      return baseRow;
+    });
+
+    const itemsTable = {
+      margin:[0,2,0,0],
+      table:{ headerRows:1, widths:colWidths, body:[tableHead, ...tableBody] },
+      layout:{
+        hLineWidth:(i)=>i<=1?1:0.5,
+        vLineWidth:()=>0,
+        hLineColor:()=>C.border,
+        fillColor:(i)=>i===0?C.headBg:null
+      }
+    };
+
+    // ── Totales ──
+    const totRow=(lbl,val,big)=>({
+      columns:[
+        { text:lbl, alignment:'right', fontSize:big?11:8.5, bold:big, color:big?C.dark:C.mid },
+        { text:val,  alignment:'right', fontSize:big?13:8.5, bold:big, color:big?C.accent:C.dark, width:80 }
+      ],
+      margin:[0, big?4:1, 0, big?4:1]
+    });
+
+    const totalesBlock = {
+      alignment:'right',
+      margin:[0,10,0,0],
+      stack:[
+        { canvas:[{type:'line',x1:0,y1:0,x2:515,y2:0,lineWidth:0.5,lineColor:C.border}], margin:[0,0,0,6] },
+        totRow('Subtotal', COP(totals.sub), false),
+        totRow('Descuento total', COP(totals.disc), false),
+        ivaOn ? totRow('IVA (19 %)', COP(totals.iva), false) : {},
+        { canvas:[{type:'line',x1:290,y1:0,x2:515,y2:0,lineWidth:0.5,lineColor:C.border}], margin:[0,4,0,4] },
+        totRow('Valor TOTAL', COP(totals.grand), true),
+      ]
+    };
+
+    // ── Pie de página / observaciones ──
+    const footerItems=[];
+    if(v('obs-name')||v('obs-email')){
+      const contact=[v('obs-name'),v('obs-email')].filter(Boolean).join('   ·   ');
+      footerItems.push({ text:'Contacto: '+contact, fontSize:8, color:C.mid, margin:[0,0,0,3] });
+    }
+    if(v('obs-text')){
+      footerItems.push({ text:v('obs-text'), fontSize:8, color:C.mid, italics:true });
+    }
+    const footerBlock = footerItems.length ? {
+      margin:[0,14,0,0],
+      stack:[
+        { canvas:[{type:'line',x1:0,y1:0,x2:515,y2:0,lineWidth:0.5,lineColor:C.border}], margin:[0,0,0,6] },
+        ...footerItems
+      ]
+    } : null;
+
+    // ── Documento final ──
+    const separador = { canvas:[{type:'line',x1:0,y1:0,x2:515,y2:0,lineWidth:1,lineColor:C.dark}], margin:[0,0,0,6] };
+
+    const docDef = {
+      pageSize:'LETTER',
+      pageMargins:[40, 40, 40, 50],
+      defaultStyle:{ font:'Roboto', fontSize:9, color:C.dark, lineHeight:1.4 },
+      content:[
+        header, separador,
+        clienteBlock || {},
+        { text:'PRODUCTOS / SERVICIOS', fontSize:7, bold:true, color:C.muted,
+          characterSpacing:1.5, margin:[0,0,0,4] },
+        itemsTable,
+        totalesBlock,
+        footerBlock || {}
+      ],
+      footer:(currentPage, pageCount)=>({
+        columns:[
+          { text:'Generado por CotizaPro', fontSize:7, color:C.muted, margin:[40,0,0,0] },
+          { text:currentPage+' / '+pageCount, fontSize:7, color:C.muted, alignment:'right', margin:[0,0,40,0] }
+        ]
+      })
+    };
+
+    pdfMake.createPdf(docDef).download(filename);
+    toast('\uD83D\uDCC4 PDF descargado: '+filename, 'ok');
+
+  }catch(err){
+    console.error('PDF error:', err);
+    toast('Error al generar PDF: '+err.message, 'err');
+  }finally{
+    hideLoading();
+    if(btn){ btn.disabled=false; btn.innerHTML=origHTML; }
+  }
+}
 
 // ====================================================
 // MÓVIL: sincronización de campos duplicados + total flotante
@@ -2998,9 +3286,13 @@ window.addEventListener('scroll', ()=>{
     <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
     Guardar
   </button>
-  <button class="mob-bar-btn primary" onclick="printDoc()">
+  <button class="mob-bar-btn" onclick="printDoc()">
     <svg viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
     Imprimir
+  </button>
+  <button class="mob-bar-btn primary" onclick="generarPDF()">
+    <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+    PDF
   </button>
 </div>
 
